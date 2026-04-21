@@ -45,10 +45,21 @@ import org.helm.notation2.parser.notation.HELM2Notation;
 import org.helm.notation2.tools.ChangeObjects;
 import org.helm.notation2.tools.HELM2NotationUtils;
 import org.jdom2.JDOMException;
+import org.helm.notation2.parser.notation.polymer.CarbEntity;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 public class HELM2NotationUtilsTest {
+
+  @Test
+  public void testCARBPolymer() throws ParserException, JDOMException {
+    String notation = "CARB1{[β-D-Gal].R4[β-D-GlcNAc].R6[α-D-GalNAc]}$$$$V2.0";
+    HELM2Notation helm2notation = HELM2NotationUtils.readNotation(notation);
+    Assert.assertEquals(helm2notation.getListOfPolymers().size(), 1);
+    Assert.assertTrue(helm2notation.getListOfPolymers().get(0).getPolymerID() instanceof CarbEntity);
+    Assert.assertEquals(helm2notation.getListOfPolymers().get(0).getPolymerElements().getListOfElements().size(), 3);
+  }
+
 
 	@Test
 	public void testaddNotation()

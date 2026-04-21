@@ -49,9 +49,11 @@ public class Monomer implements Serializable {
 
   public static final String CHEMICAL_POLYMER_TYPE = "CHEM";
 
+  public static final String CARBOHYDRATE_POLYMER_TYPE = "CARB";
+
   public static final String[] SUPPORTED_POLYMER_TYPES = {
       NUCLIEC_ACID_POLYMER_TYPE, PEPTIDE_POLYMER_TYPE,
-      CHEMICAL_POLYMER_TYPE};
+      CHEMICAL_POLYMER_TYPE, CARBOHYDRATE_POLYMER_TYPE};
 
   public static final String BACKBONE_MOMONER_TYPE = "Backbone";
 

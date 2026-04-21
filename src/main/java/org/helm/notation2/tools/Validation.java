@@ -57,6 +57,7 @@ import org.helm.notation2.parser.notation.polymer.MonomerNotationGroup;
 import org.helm.notation2.parser.notation.polymer.MonomerNotationGroupElement;
 import org.helm.notation2.parser.notation.polymer.MonomerNotationList;
 import org.helm.notation2.parser.notation.polymer.MonomerNotationUnit;
+import org.helm.notation2.parser.notation.polymer.CarbMonomerParser;
 import org.helm.notation2.parser.notation.polymer.MonomerNotationUnitRNA;
 import org.helm.notation2.parser.notation.polymer.PolymerNotation;
 import org.helm.notation2.parser.notation.polymer.RNAEntity;
@@ -496,6 +497,26 @@ public final class Validation {
 			LOG.info("Nucleotide type for RNA: " + str);
 			return true;
 
+		}
+
+		/* CARB: strip R<n> linkage-position prefix then parse qualifier into base name.
+		 * "R4[β-D-GlcNAc]" → strip R4 → "[β-D-GlcNAc]" → strip brackets → "β-D-GlcNAc"
+		 * "[β-D-Gal]" is already handled by the bracket-stripping branch above, but may
+		 * also reach here if not in the store under the full qualified name. */
+		if (type.equals(Monomer.CARBOHYDRATE_POLYMER_TYPE)) {
+			String carbId = str;
+			if (carbId.matches("R\\d+\\[.*\\]")) {
+				carbId = carbId.replaceFirst("^R\\d+", "");
+			}
+			if (carbId.startsWith("[") && carbId.endsWith("]")) {
+				carbId = carbId.substring(1, carbId.length() - 1);
+			}
+			try {
+				String baseName = CarbMonomerParser.parse(carbId).getBaseName();
+				return monomerStore.hasMonomer(type, baseName);
+			} catch (org.helm.notation2.parser.exceptionparser.NotationException e) {
+				return false;
+			}
 		}
 
 		LOG.info("SMILES Check");
