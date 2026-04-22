@@ -53,7 +53,7 @@ public class HELM2NotationUtilsTest {
 
   @Test
   public void testCARBPolymer() throws ParserException, JDOMException {
-    String notation = "CARB1{[β-D-Gal].R4[β-D-GlcNAc].R6[α-D-GalNAc]}$$$$V2.0";
+    String notation = "CARB1{[b-D-Gal].R4[b-D-GlcNAc].R6[a-D-GalNAc]}$$$$V2.0";
     HELM2Notation helm2notation = HELM2NotationUtils.readNotation(notation);
     Assert.assertEquals(helm2notation.getListOfPolymers().size(), 1);
     Assert.assertTrue(helm2notation.getListOfPolymers().get(0).getPolymerID() instanceof CarbEntity);

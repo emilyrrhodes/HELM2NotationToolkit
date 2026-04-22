@@ -500,8 +500,8 @@ public final class Validation {
 		}
 
 		/* CARB: strip R<n> linkage-position prefix then parse qualifier into base name.
-		 * "R4[β-D-GlcNAc]" → strip R4 → "[β-D-GlcNAc]" → strip brackets → "β-D-GlcNAc"
-		 * "[β-D-Gal]" is already handled by the bracket-stripping branch above, but may
+		 * "R4[b-D-GlcNAc]" → strip R4 → "[b-D-GlcNAc]" → strip brackets → "b-D-GlcNAc"
+		 * "[b-D-Gal]" is already handled by the bracket-stripping branch above, but may
 		 * also reach here if not in the store under the full qualified name. */
 		if (type.equals(Monomer.CARBOHYDRATE_POLYMER_TYPE)) {
 			String carbId = str;

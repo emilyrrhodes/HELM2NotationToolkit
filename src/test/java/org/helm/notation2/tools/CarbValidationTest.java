@@ -32,7 +32,7 @@ public class CarbValidationTest {
     Field wsField = MonomerStoreConfiguration.class.getDeclaredField("isUseWebservice");
     wsField.setAccessible(true);
     wsField.set(MonomerStoreConfiguration.getInstance(), false);
-    // Monomers are keyed by base name; α/β and D/L are qualifiers parsed at lookup time
+    // Monomers are keyed by base name; a/b and D/L are qualifiers parsed at lookup time
     MonomerFactory.getInstance().getMonomerStore().addMonomer(carbMonomer("Gal", "Galactose"));
     MonomerFactory.getInstance().getMonomerStore().addMonomer(carbMonomer("GlcNAc", "N-Acetylglucosamine"));
     MonomerFactory.getInstance().getMonomerStore().addMonomer(carbMonomer("GalNAc", "N-Acetylgalactosamine"));
@@ -40,25 +40,25 @@ public class CarbValidationTest {
 
   @Test
   public void testCarbMonomerParsing() throws org.helm.notation2.parser.exceptionparser.NotationException {
-    CarbMonomerNotation gal = CarbMonomerParser.parse("β-D-Gal");
-    Assert.assertEquals(gal.getAnomericity(), "β");
-    Assert.assertEquals(gal.getStereochemistry(), "D");
+    CarbMonomerNotation gal = CarbMonomerParser.parse("b-D-Gal");
+    Assert.assertEquals(gal.getAnomer(), "b");
+    Assert.assertEquals(gal.getAbsoluteConfiguration(), "D");
     Assert.assertEquals(gal.getBaseName(), "Gal");
 
-    CarbMonomerNotation galNAc = CarbMonomerParser.parse("α-D-GalNAc");
-    Assert.assertEquals(galNAc.getAnomericity(), "α");
-    Assert.assertEquals(galNAc.getStereochemistry(), "D");
+    CarbMonomerNotation galNAc = CarbMonomerParser.parse("a-D-GalNAc");
+    Assert.assertEquals(galNAc.getAnomer(), "a");
+    Assert.assertEquals(galNAc.getAbsoluteConfiguration(), "D");
     Assert.assertEquals(galNAc.getBaseName(), "GalNAc");
 
     CarbMonomerNotation unqualified = CarbMonomerParser.parse("Gal");
-    Assert.assertNull(unqualified.getAnomericity());
-    Assert.assertNull(unqualified.getStereochemistry());
+    Assert.assertNull(unqualified.getAnomer());
+    Assert.assertNull(unqualified.getAbsoluteConfiguration());
     Assert.assertEquals(unqualified.getBaseName(), "Gal");
   }
 
   @Test
   public void testCARBPolymerIsRecognized() throws ParserException, JDOMException {
-    String notation = "CARB1{[β-D-Gal].R4[β-D-GlcNAc].R6[α-D-GalNAc]}$$$$V2.0";
+    String notation = "CARB1{[b-D-Gal].R4[b-D-GlcNAc].R6[a-D-GalNAc]}$$$$V2.0";
     HELM2Notation helm2notation = HELM2NotationUtils.readNotation(notation);
     Assert.assertEquals(helm2notation.getListOfPolymers().size(), 1);
     Assert.assertTrue(helm2notation.getListOfPolymers().get(0).getPolymerID() instanceof CarbEntity);
@@ -70,8 +70,8 @@ public class CarbValidationTest {
       PolymerIDsException, MonomerException, GroupingNotationException,
       ConnectionNotationException, NotationException, ChemistryException,
       MonomerLoadingException, org.helm.notation2.parser.exceptionparser.NotationException {
-    // β-D-Gal β(1→4) β-D-GlcNAc forms LacNAc; α-D-GalNAc initiates O-glycan core structures
-    String notation = "CARB1{[β-D-Gal].R4[β-D-GlcNAc].R6[α-D-GalNAc]}$$$$V2.0";
+    // b-D-Gal b(1→4) b-D-GlcNAc forms LacNAc; a-D-GalNAc initiates O-glycan core structures
+    String notation = "CARB1{[b-D-Gal].R4[b-D-GlcNAc].R6[a-D-GalNAc]}$$$$V2.0";
     HELM2Notation helm2notation = HELM2NotationUtils.readNotation(notation);
     Validation.validateNotationObjects(helm2notation);
   }
