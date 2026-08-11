@@ -36,13 +36,13 @@ public class CarbValidationTest {
     Field wsField = MonomerStoreConfiguration.class.getDeclaredField("isUseWebservice");
     wsField.setAccessible(true);
     wsField.set(MonomerStoreConfiguration.getInstance(), false);
-    // Monomers are keyed by base name; a/b and D/L are qualifiers parsed at lookup time.
-    // addMonomer() silently skips a base name that is already present, so evict any
-    // pre-existing (possibly stale, cache-persisted) CARB entry first to keep this
+    // Monomers are keyed per stereoisomer by their full residue id (anomer + D/L +
+    // base name). addMonomer() silently skips an id that is already present, so evict
+    // any pre-existing (possibly stale, cache-persisted) CARB entry first to keep this
     // test hermetic regardless of the shared ~/.helm monomer cache state.
-    registerCarb(carbMonomer("Gal", "Galactose"));
-    registerCarb(carbMonomer("GlcNAc", "N-Acetylglucosamine"));
-    registerCarb(carbMonomer("GalNAc", "N-Acetylgalactosamine"));
+    registerCarb(carbMonomer("b-D-Gal", "beta-D-Galactose"));
+    registerCarb(carbMonomer("b-D-GlcNAc", "beta-D-N-Acetylglucosamine"));
+    registerCarb(carbMonomer("a-D-GalNAc", "alpha-D-N-Acetylgalactosamine"));
   }
 
   @Test

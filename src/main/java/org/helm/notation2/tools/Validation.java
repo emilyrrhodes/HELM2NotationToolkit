@@ -238,21 +238,29 @@ public final class Validation {
 	}
 
 	/**
-	 * method to resolve a CARB monomer's base sugar to its monomer store entry
+	 * method to resolve a CARB monomer to its monomer store entry
+	 *
+	 * <p>Monomers are keyed per stereoisomer: the full residue id as written -
+	 * including the anomeric descriptor (a/b) and absolute configuration (D/L) -
+	 * is the store key, so {@code a-D-Glcp} and {@code b-D-Glcp} resolve to
+	 * distinct entries. The grammar guarantees canonical casing and the store's
+	 * inner map is case-insensitive, so the raw id is a safe key. The residue is
+	 * still parsed first, purely to reject malformed ids.
 	 *
 	 * @param carbId CARB monomer unit string, e.g. "[a-D-Glcp]" or "a-D-Glcp"
-	 * @param monomerStore monomer store to resolve the base monomer from
+	 * @param monomerStore monomer store to resolve the monomer from
 	 * @return the resolved monomer, or null if the unit does not parse or has
-	 *         no matching base name in the store
+	 *         no matching entry in the store
 	 */
 	private static Monomer resolveCarbMonomer(String carbId, MonomerStore monomerStore) {
 		if (carbId.startsWith("[") && carbId.endsWith("]")) {
 			carbId = carbId.substring(1, carbId.length() - 1);
 		}
 		try {
-			String baseName = CarbMonomerParser.parse(carbId).getBaseName();
-			return monomerStore.hasMonomer(Monomer.CARBOHYDRATE_POLYMER_TYPE, baseName)
-					? monomerStore.getMonomer(Monomer.CARBOHYDRATE_POLYMER_TYPE, baseName) : null;
+			/* parse only to reject malformed residue content; the full id is the key */
+			CarbMonomerParser.parse(carbId);
+			return monomerStore.hasMonomer(Monomer.CARBOHYDRATE_POLYMER_TYPE, carbId)
+					? monomerStore.getMonomer(Monomer.CARBOHYDRATE_POLYMER_TYPE, carbId) : null;
 		} catch (org.helm.notation2.parser.exceptionparser.NotationException e) {
 			return null;
 		}
@@ -662,12 +670,10 @@ public final class Validation {
 
 		} else if (not instanceof CarbMonomerNotationUnit) {
 			/*
-			 * CARB monomer IDs carry an anomer/configuration qualifier (e.g.
-			 * "a-D-Glcp") that is not part of the monomer store's key (the
-			 * store is keyed by base sugar name, e.g. "Glcp") - resolve via
-			 * the same base-name lookup used for validation, rather than
-			 * MethodsMonomerUtils.getMonomer, which expects the id to be the
-			 * store key directly.
+			 * CARB monomers are keyed per stereoisomer by their full residue id
+			 * (e.g. "a-D-Glcp"), so resolve via the same helper used for
+			 * validation rather than MethodsMonomerUtils.getMonomer - the helper
+			 * strips brackets and validates the residue before the store lookup.
 			 */
 			Monomer monomer = resolveCarbMonomer(not.getUnit(), monomerStore);
 			if (monomer == null) {

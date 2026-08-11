@@ -48,10 +48,10 @@ public class CarbBuilderMoleculeTest {
     registerCarb(glucopyranose());
   }
 
-  // addMonomer() silently skips a base name already in the store, so evict any
+  // addMonomer() silently skips an id already in the store, so evict any
   // pre-existing (possibly stale, cache-persisted) CARB entry first - otherwise a
-  // leftover "Glcp" without these SMILES/cap definitions would make the build tests
-  // fail depending on the shared ~/.helm monomer cache state.
+  // leftover "b-D-Glcp" without these SMILES/cap definitions would make the build
+  // tests fail depending on the shared ~/.helm monomer cache state.
   private void registerCarb(Monomer monomer) throws IOException, MonomerException, ChemistryException {
     java.util.Map<String, java.util.Map<String, Monomer>> db =
         MonomerFactory.getInstance().getMonomerStore().getMonomerDB();
@@ -201,10 +201,10 @@ public class CarbBuilderMoleculeTest {
    */
   private Monomer glucopyranose() {
     Monomer m = new Monomer();
-    m.setAlternateId("Glcp");
+    m.setAlternateId("b-D-Glcp");
     m.setPolymerType(Monomer.CARBOHYDRATE_POLYMER_TYPE);
     m.setMonomerType(Monomer.BACKBONE_MOMONER_TYPE);
-    m.setName("D-Glucopyranose");
+    m.setName("beta-D-Glucopyranose");
     m.setCanSMILES("[H:6]OC[C@H]1O[C@@H]([OH:1])[C@H](O[H:2])[C@@H](O[H:3])[C@@H]1O[H:4]");
     m.getAttachmentList().add(attachment("R1", "OH", "O[*:1]"));
     m.getAttachmentList().add(attachment("R2", "H", "[*:2][H]"));
