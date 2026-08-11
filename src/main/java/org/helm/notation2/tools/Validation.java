@@ -151,12 +151,9 @@ public final class Validation {
 			MonomerLoadingException, org.helm.notation2.parser.exceptionparser.NotationException {
 		MonomerStore monomerStore = MonomerFactory.getInstance().getMonomerStore();
 		for (MonomerNotation monomerNotation : mon) {
-			if (monomerNotation instanceof CarbMonomerNotationUnit) {
-				CarbMonomerNotationUnit carbUnit = (CarbMonomerNotationUnit) monomerNotation;
-				Monomer monomer = resolveCarbMonomer(carbUnit.getUnit(), monomerStore);
-				if (monomer == null || !isCarbAttachmentValid(carbUnit, monomer)) {
-					LOG.info("CARB monomer references an R-group that is not a defined attachment point: "
-							+ monomerNotation.getUnit());
+			if (Monomer.CARBOHYDRATE_POLYMER_TYPE.equals(monomerNotation.getType())) {
+				if (!validateCarbElement(monomerNotation, monomerStore)) {
+					LOG.info("CARB monomer is not valid: " + monomerNotation.getUnit());
 					return false;
 				}
 				continue;
@@ -166,6 +163,47 @@ public final class Validation {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Validates a single CARB polymer element. A concrete monomer must resolve to a
+	 * base sugar in the store and reference only defined attachment points; a
+	 * fully-unknown monomer ("X"/"*"/"?") is accepted verbatim (it carries no
+	 * connection points); an ambiguity group (mixture "(A+B)" / or-group "(A,B)")
+	 * is valid when every one of its member monomers is valid.
+	 *
+	 * @param monomerNotation the CARB element to validate
+	 * @param monomerStore the monomer store to resolve base sugars against
+	 * @return true if the element is valid
+	 */
+	private static boolean validateCarbElement(MonomerNotation monomerNotation, MonomerStore monomerStore) {
+		if (monomerNotation instanceof CarbMonomerNotationUnit) {
+			CarbMonomerNotationUnit carbUnit = (CarbMonomerNotationUnit) monomerNotation;
+			/* an unknown monomer carries no connection points - nothing to resolve or check */
+			if (carbUnit.isUnknown()) {
+				return true;
+			}
+			Monomer monomer = resolveCarbMonomer(carbUnit.getUnit(), monomerStore);
+			return monomer != null && isCarbAttachmentValid(carbUnit, monomer);
+		}
+		if (monomerNotation instanceof MonomerNotationGroup) {
+			for (MonomerNotationGroupElement element : ((MonomerNotationGroup) monomerNotation).getListOfElements()) {
+				if (!validateCarbElement(element.getMonomerNotation(), monomerStore)) {
+					return false;
+				}
+			}
+			return true;
+		}
+		/* a bare "?"/"_" unknown token still routes through the generic whitelist */
+		return isMonomerValidUnknownToken(monomerNotation.getUnit());
+	}
+
+	/**
+	 * @param str a monomer token
+	 * @return true if the token is one of the generic unknown-monomer tokens ("?"/"_")
+	 */
+	private static boolean isMonomerValidUnknownToken(String str) {
+		return str.equals("?") || str.equals("_") || str.equals("*") || str.equals("X");
 	}
 
 	/**

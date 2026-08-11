@@ -36,10 +36,13 @@ public class CarbValidationTest {
     Field wsField = MonomerStoreConfiguration.class.getDeclaredField("isUseWebservice");
     wsField.setAccessible(true);
     wsField.set(MonomerStoreConfiguration.getInstance(), false);
-    // Monomers are keyed by base name; a/b and D/L are qualifiers parsed at lookup time
-    MonomerFactory.getInstance().getMonomerStore().addMonomer(carbMonomer("Gal", "Galactose"));
-    MonomerFactory.getInstance().getMonomerStore().addMonomer(carbMonomer("GlcNAc", "N-Acetylglucosamine"));
-    MonomerFactory.getInstance().getMonomerStore().addMonomer(carbMonomer("GalNAc", "N-Acetylgalactosamine"));
+    // Monomers are keyed by base name; a/b and D/L are qualifiers parsed at lookup time.
+    // addMonomer() silently skips a base name that is already present, so evict any
+    // pre-existing (possibly stale, cache-persisted) CARB entry first to keep this
+    // test hermetic regardless of the shared ~/.helm monomer cache state.
+    registerCarb(carbMonomer("Gal", "Galactose"));
+    registerCarb(carbMonomer("GlcNAc", "N-Acetylglucosamine"));
+    registerCarb(carbMonomer("GalNAc", "N-Acetylgalactosamine"));
   }
 
   @Test
@@ -91,6 +94,43 @@ public class CarbValidationTest {
     Validation.validateNotationObjects(helm2notation);
   }
 
+  @Test
+  public void testCARBUnknownMonomerValidates() throws ParserException, JDOMException,
+      PolymerIDsException, MonomerException, GroupingNotationException,
+      ConnectionNotationException, NotationException, ChemistryException,
+      MonomerLoadingException, org.helm.notation2.parser.exceptionparser.NotationException {
+    // A fully-unknown monomer carries no connection points and needs no store
+    // lookup - a lone unknown polymer, and an unknown mixed into a real chain,
+    // must both pass validation (they only fail later, at build time).
+    Validation.validateNotationObjects(HELM2NotationUtils.readNotation("CARB1{*}$$$$V2.0"));
+    Validation.validateNotationObjects(
+        HELM2NotationUtils.readNotation("CARB1{[b-D-Gal].X.R4:[b-D-GlcNAc]}$$$$V2.0"));
+  }
+
+  @Test
+  public void testCARBAmbiguityGroupsValidate() throws ParserException, JDOMException,
+      PolymerIDsException, MonomerException, GroupingNotationException,
+      ConnectionNotationException, NotationException, ChemistryException,
+      MonomerLoadingException, org.helm.notation2.parser.exceptionparser.NotationException {
+    // A mixture and an or-group are valid when every member monomer resolves and
+    // references only defined attachment points.
+    Validation.validateNotationObjects(
+        HELM2NotationUtils.readNotation("CARB1{([b-D-Gal]+[b-D-GlcNAc])}$$$$V2.0"));
+    Validation.validateNotationObjects(
+        HELM2NotationUtils.readNotation("CARB1{([b-D-Gal],[b-D-GlcNAc])}$$$$V2.0"));
+  }
+
+  @Test(expectedExceptions = MonomerException.class)
+  public void testCARBAmbiguityGroupWithUndefinedMemberIsRejected() throws ParserException, JDOMException,
+      PolymerIDsException, MonomerException, GroupingNotationException,
+      ConnectionNotationException, NotationException, ChemistryException,
+      MonomerLoadingException, org.helm.notation2.parser.exceptionparser.NotationException {
+    // An or-group is only valid if every member is - here "Xyz" is not in the store.
+    String notation = "CARB1{([b-D-Gal],[b-D-Xyz])}$$$$V2.0";
+    HELM2Notation helm2notation = HELM2NotationUtils.readNotation(notation);
+    Validation.validateNotationObjects(helm2notation);
+  }
+
   @Test(expectedExceptions = HELM1FormatException.class)
   public void testCARBIsRejectedByHELM1Conversion() throws ParserException, JDOMException, MonomerLoadingException,
       CTKException, ValidationException, ChemistryException, HELM1FormatException {
@@ -99,6 +139,16 @@ public class CarbValidationTest {
     String notation = "CARB1{[b-D-Gal].R4:[b-D-GlcNAc].R6:[a-D-GalNAc]}$$$$V2.0";
     HELM2Notation helm2notation = HELM2NotationUtils.readNotation(notation);
     HELM1Utils.getStandard(helm2notation);
+  }
+
+  private void registerCarb(Monomer monomer) throws IOException, MonomerException, ChemistryException {
+    java.util.Map<String, java.util.Map<String, Monomer>> db =
+        MonomerFactory.getInstance().getMonomerStore().getMonomerDB();
+    java.util.Map<String, Monomer> carbMap = db.get(Monomer.CARBOHYDRATE_POLYMER_TYPE);
+    if (carbMap != null) {
+      carbMap.remove(monomer.getAlternateId());
+    }
+    MonomerFactory.getInstance().getMonomerStore().addMonomer(monomer);
   }
 
   private Monomer carbMonomer(String alternateId, String name) {

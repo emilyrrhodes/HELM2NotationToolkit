@@ -46,8 +46,12 @@ import org.helm.notation2.parser.notation.connection.ConnectionNotation;
 import org.helm.notation2.parser.notation.polymer.BlobEntity;
 import org.helm.notation2.parser.notation.polymer.CarbEdge;
 import org.helm.notation2.parser.notation.polymer.CarbEntity;
+import org.helm.notation2.parser.notation.polymer.CarbMonomerNotationUnit;
+import org.helm.notation2.parser.notation.polymer.CarbRepeat;
 import org.helm.notation2.parser.notation.polymer.ChemEntity;
 import org.helm.notation2.parser.notation.polymer.GroupEntity;
+import org.helm.notation2.parser.notation.polymer.MonomerNotation;
+import org.helm.notation2.parser.notation.polymer.MonomerNotationGroup;
 import org.helm.notation2.parser.notation.polymer.PeptideEntity;
 import org.helm.notation2.parser.notation.polymer.PolymerNotation;
 import org.helm.notation2.parser.notation.polymer.RNAEntity;
@@ -97,6 +101,35 @@ public final class BuilderMolecule {
           MethodsMonomerUtils.getListOfHandledMonomers(polymernotation.getPolymerElements().getListOfElements());
       return buildMoleculefromPeptideOrRNA(polymernotation.getPolymerID().getId(), validMonomers);
     } /* Case 4: CARB */ else if (polymernotation.getPolymerID() instanceof CarbEntity) {
+      /*
+       * A non-integer repeat count (a range, "n", or "<int>-n") has no concrete
+       * structure to build - it is a build-time dead end, exactly like the other
+       * polymer types (see MethodsMonomerUtils.getListOfHandledMonomers). Integer
+       * repeats are already expanded upstream by the parser's numbering into
+       * concrete positions and edges, so they flow through unchanged.
+       */
+      for (MonomerNotation element : polymernotation.getPolymerElements().getListOfElements()) {
+        if (element instanceof CarbRepeat && !((CarbRepeat) element).hasIntegerCount()) {
+          throw new HELM2HandledException("CARB repeating group with a non-integer count ('"
+              + element.getCount() + "') cannot be built into a concrete molecule");
+        }
+      }
+      /*
+       * Ambiguous CARB - a fully-unknown monomer ("X"/"*"/"?") or an ambiguity
+       * group (mixture "(A+B)" / or-group "(A,B)") - has no single concrete
+       * structure, so a molecule cannot be built. Reject it cleanly as a
+       * build-time dead end, exactly like the other polymer types.
+       */
+      for (MonomerNotation element : polymernotation.getListMonomers()) {
+        if (element instanceof MonomerNotationGroup) {
+          throw new HELM2HandledException("CARB ambiguity group ('" + element.getUnit()
+              + "') cannot be built into a concrete molecule");
+        }
+        if (element instanceof CarbMonomerNotationUnit && ((CarbMonomerNotationUnit) element).isUnknown()) {
+          throw new HELM2HandledException("Unknown CARB monomer ('" + element.getUnit()
+              + "') cannot be built into a concrete molecule");
+        }
+      }
       List<Monomer> validMonomers =
           MethodsMonomerUtils.getListOfHandledMonomers(polymernotation.getListMonomers());
       return buildMoleculefromCARB(polymernotation, validMonomers);
