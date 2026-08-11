@@ -57,6 +57,8 @@ import org.helm.notation2.parser.notation.polymer.MonomerNotationGroup;
 import org.helm.notation2.parser.notation.polymer.MonomerNotationGroupElement;
 import org.helm.notation2.parser.notation.polymer.MonomerNotationList;
 import org.helm.notation2.parser.notation.polymer.MonomerNotationUnit;
+import org.helm.notation2.parser.notation.polymer.CarbBranch;
+import org.helm.notation2.parser.notation.polymer.CarbMonomerNotationUnit;
 import org.helm.notation2.parser.notation.polymer.CarbMonomerParser;
 import org.helm.notation2.parser.notation.polymer.MonomerNotationUnitRNA;
 import org.helm.notation2.parser.notation.polymer.PolymerNotation;
@@ -147,12 +149,75 @@ public final class Validation {
 	 */
 	protected static boolean validateMonomers(List<MonomerNotation> mon) throws ChemistryException,
 			MonomerLoadingException, org.helm.notation2.parser.exceptionparser.NotationException {
+		MonomerStore monomerStore = MonomerFactory.getInstance().getMonomerStore();
 		for (MonomerNotation monomerNotation : mon) {
+			if (monomerNotation instanceof CarbMonomerNotationUnit) {
+				CarbMonomerNotationUnit carbUnit = (CarbMonomerNotationUnit) monomerNotation;
+				Monomer monomer = resolveCarbMonomer(carbUnit.getUnit(), monomerStore);
+				if (monomer == null || !isCarbAttachmentValid(carbUnit, monomer)) {
+					LOG.info("CARB monomer references an R-group that is not a defined attachment point: "
+							+ monomerNotation.getUnit());
+					return false;
+				}
+				continue;
+			}
 			if (!(isMonomerValid(monomerNotation.getUnit(), monomerNotation.getType()))) {
 				return false;
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * method to check that every R-group a CARB monomer notation references -
+	 * the R-group it is attached to its predecessor with, its own anomeric
+	 * R-group, and the convergence R-group of each of its branches - is an
+	 * attachment point that actually exists on the resolved monomer
+	 *
+	 * @param unit CARB monomer notation to check
+	 * @param monomer the already-resolved base monomer
+	 * @return true if every referenced R-group is a valid attachment point (or
+	 *         unknown, "R?"), false otherwise
+	 */
+	private static boolean isCarbAttachmentValid(CarbMonomerNotationUnit unit, Monomer monomer) {
+		if (!isCarbRGroupValid(unit.getIncomingRGroup(), monomer)
+				|| !isCarbRGroupValid(unit.getAnomericRGroup(), monomer)) {
+			return false;
+		}
+		for (CarbBranch branch : unit.getBranches()) {
+			if (!isCarbRGroupValid(branch.getConvergenceRGroup(), monomer)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static boolean isCarbRGroupValid(String rGroup, Monomer monomer) {
+		if (rGroup == null || rGroup.equalsIgnoreCase("R?")) {
+			return true;
+		}
+		return monomer.getAttachment(rGroup) != null;
+	}
+
+	/**
+	 * method to resolve a CARB monomer's base sugar to its monomer store entry
+	 *
+	 * @param carbId CARB monomer unit string, e.g. "[a-D-Glcp]" or "a-D-Glcp"
+	 * @param monomerStore monomer store to resolve the base monomer from
+	 * @return the resolved monomer, or null if the unit does not parse or has
+	 *         no matching base name in the store
+	 */
+	private static Monomer resolveCarbMonomer(String carbId, MonomerStore monomerStore) {
+		if (carbId.startsWith("[") && carbId.endsWith("]")) {
+			carbId = carbId.substring(1, carbId.length() - 1);
+		}
+		try {
+			String baseName = CarbMonomerParser.parse(carbId).getBaseName();
+			return monomerStore.hasMonomer(Monomer.CARBOHYDRATE_POLYMER_TYPE, baseName)
+					? monomerStore.getMonomer(Monomer.CARBOHYDRATE_POLYMER_TYPE, baseName) : null;
+		} catch (org.helm.notation2.parser.exceptionparser.NotationException e) {
+			return null;
+		}
 	}
 
 	/**
@@ -499,26 +564,6 @@ public final class Validation {
 
 		}
 
-		/* CARB: strip R<n> linkage-position prefix then parse qualifier into base name.
-		 * "R4[b-D-GlcNAc]" → strip R4 → "[b-D-GlcNAc]" → strip brackets → "b-D-GlcNAc"
-		 * "[b-D-Gal]" is already handled by the bracket-stripping branch above, but may
-		 * also reach here if not in the store under the full qualified name. */
-		if (type.equals(Monomer.CARBOHYDRATE_POLYMER_TYPE)) {
-			String carbId = str;
-			if (carbId.matches("R\\d+\\[.*\\]")) {
-				carbId = carbId.replaceFirst("^R\\d+", "");
-			}
-			if (carbId.startsWith("[") && carbId.endsWith("]")) {
-				carbId = carbId.substring(1, carbId.length() - 1);
-			}
-			try {
-				String baseName = CarbMonomerParser.parse(carbId).getBaseName();
-				return monomerStore.hasMonomer(type, baseName);
-			} catch (org.helm.notation2.parser.exceptionparser.NotationException e) {
-				return false;
-			}
-		}
-
 		LOG.info("SMILES Check");
 		/* SMILES Check */
 		if (str.charAt(0) == '[' && str.charAt(str.length() - 1) == ']') {
@@ -577,6 +622,20 @@ public final class Validation {
 		if (not instanceof MonomerNotationUnitRNA) {
 			monomers.addAll(getMonomersRNA((MonomerNotationUnitRNA) not, monomerStore, position));
 
+		} else if (not instanceof CarbMonomerNotationUnit) {
+			/*
+			 * CARB monomer IDs carry an anomer/configuration qualifier (e.g.
+			 * "a-D-Glcp") that is not part of the monomer store's key (the
+			 * store is keyed by base sugar name, e.g. "Glcp") - resolve via
+			 * the same base-name lookup used for validation, rather than
+			 * MethodsMonomerUtils.getMonomer, which expects the id to be the
+			 * store key directly.
+			 */
+			Monomer monomer = resolveCarbMonomer(not.getUnit(), monomerStore);
+			if (monomer == null) {
+				throw new MonomerException("Defined Monomer is not in the database: " + not.getUnit());
+			}
+			monomers.add(monomer);
 		} else if (not instanceof MonomerNotationUnit) {
 			String id = not.getUnit();
 			// if (id.startsWith("[") && id.endsWith("]")) {

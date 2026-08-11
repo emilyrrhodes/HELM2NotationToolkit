@@ -4,17 +4,21 @@ import java.io.IOException;
 
 import java.lang.reflect.Field;
 
+import org.helm.notation2.Attachment;
 import org.helm.notation2.Monomer;
 import org.helm.notation2.MonomerFactory;
 import org.helm.notation2.exception.ChemistryException;
 import org.helm.notation2.wsadapter.MonomerStoreConfiguration;
 import org.helm.notation2.exception.ConnectionNotationException;
 import org.helm.notation2.exception.GroupingNotationException;
+import org.helm.notation2.exception.HELM1FormatException;
 import org.helm.notation2.exception.MonomerException;
 import org.helm.notation2.exception.MonomerLoadingException;
 import org.helm.notation2.exception.NotationException;
 import org.helm.notation2.exception.ParserException;
 import org.helm.notation2.exception.PolymerIDsException;
+import org.helm.notation2.exception.ValidationException;
+import org.helm.chemtoolkit.CTKException;
 import org.helm.notation2.parser.notation.HELM2Notation;
 import org.helm.notation2.parser.notation.polymer.CarbEntity;
 import org.helm.notation2.parser.notation.polymer.CarbMonomerNotation;
@@ -58,7 +62,7 @@ public class CarbValidationTest {
 
   @Test
   public void testCARBPolymerIsRecognized() throws ParserException, JDOMException {
-    String notation = "CARB1{[b-D-Gal].R4[b-D-GlcNAc].R6[a-D-GalNAc]}$$$$V2.0";
+    String notation = "CARB1{[b-D-Gal].R4:[b-D-GlcNAc].R6:[a-D-GalNAc]}$$$$V2.0";
     HELM2Notation helm2notation = HELM2NotationUtils.readNotation(notation);
     Assert.assertEquals(helm2notation.getListOfPolymers().size(), 1);
     Assert.assertTrue(helm2notation.getListOfPolymers().get(0).getPolymerID() instanceof CarbEntity);
@@ -70,10 +74,31 @@ public class CarbValidationTest {
       PolymerIDsException, MonomerException, GroupingNotationException,
       ConnectionNotationException, NotationException, ChemistryException,
       MonomerLoadingException, org.helm.notation2.parser.exceptionparser.NotationException {
-    // b-D-Gal b(1→4) b-D-GlcNAc forms LacNAc; a-D-GalNAc initiates O-glycan core structures
-    String notation = "CARB1{[b-D-Gal].R4[b-D-GlcNAc].R6[a-D-GalNAc]}$$$$V2.0";
+    // b-D-Gal b(1->4) b-D-GlcNAc forms LacNAc; a-D-GalNAc initiates O-glycan core structures
+    String notation = "CARB1{[b-D-Gal].R4:[b-D-GlcNAc].R6:[a-D-GalNAc]}$$$$V2.0";
     HELM2Notation helm2notation = HELM2NotationUtils.readNotation(notation);
     Validation.validateNotationObjects(helm2notation);
+  }
+
+  @Test(expectedExceptions = MonomerException.class)
+  public void testCARBValidationRejectsUndefinedRGroup() throws ParserException, JDOMException,
+      PolymerIDsException, MonomerException, GroupingNotationException,
+      ConnectionNotationException, NotationException, ChemistryException,
+      MonomerLoadingException, org.helm.notation2.parser.exceptionparser.NotationException {
+    // GlcNAc has no R9 attachment point defined - must be rejected, not silently accepted
+    String notation = "CARB1{[b-D-Gal].R9:[b-D-GlcNAc]}$$$$V2.0";
+    HELM2Notation helm2notation = HELM2NotationUtils.readNotation(notation);
+    Validation.validateNotationObjects(helm2notation);
+  }
+
+  @Test(expectedExceptions = HELM1FormatException.class)
+  public void testCARBIsRejectedByHELM1Conversion() throws ParserException, JDOMException, MonomerLoadingException,
+      CTKException, ValidationException, ChemistryException, HELM1FormatException {
+    // HELM1 predates glycans and has no CARB equivalent - conversion must fail
+    // clearly rather than silently mishandle or drop the CARB polymer
+    String notation = "CARB1{[b-D-Gal].R4:[b-D-GlcNAc].R6:[a-D-GalNAc]}$$$$V2.0";
+    HELM2Notation helm2notation = HELM2NotationUtils.readNotation(notation);
+    HELM1Utils.getStandard(helm2notation);
   }
 
   private Monomer carbMonomer(String alternateId, String name) {
@@ -82,6 +107,10 @@ public class CarbValidationTest {
     m.setPolymerType(Monomer.CARBOHYDRATE_POLYMER_TYPE);
     m.setMonomerType(Monomer.BACKBONE_MOMONER_TYPE);
     m.setName(name);
+    m.getAttachmentList().add(new Attachment("R1", Attachment.CAP_GROUP_H));
+    m.getAttachmentList().add(new Attachment("R3", Attachment.CAP_GROUP_OH));
+    m.getAttachmentList().add(new Attachment("R4", Attachment.CAP_GROUP_OH));
+    m.getAttachmentList().add(new Attachment("R6", Attachment.CAP_GROUP_OH));
     return m;
   }
 

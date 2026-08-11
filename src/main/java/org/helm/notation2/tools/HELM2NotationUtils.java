@@ -44,6 +44,7 @@ import org.helm.notation2.parser.notation.annotation.AnnotationNotation;
 import org.helm.notation2.parser.notation.connection.ConnectionNotation;
 import org.helm.notation2.parser.notation.grouping.GroupingNotation;
 import org.helm.notation2.parser.notation.polymer.BlobEntity;
+import org.helm.notation2.parser.notation.polymer.CarbEntity;
 import org.helm.notation2.parser.notation.polymer.ChemEntity;
 import org.helm.notation2.parser.notation.polymer.GroupEntity;
 import org.helm.notation2.parser.notation.polymer.HELMEntity;
@@ -186,6 +187,22 @@ public class HELM2NotationUtils {
       }
     }
     return blobPolymers;
+  }
+
+  /**
+   * method to get all carb (glycan) polymers given a list of PolymerNotation objects
+   *
+   * @param polymers List of PolymerNotation objects
+   * @return list of carb polymers
+   */
+  public final static List<PolymerNotation> getCARBPolymers(List<PolymerNotation> polymers) {
+    List<PolymerNotation> carbPolymers = new ArrayList<PolymerNotation>();
+    for (PolymerNotation polymer : polymers) {
+      if (polymer.getPolymerID() instanceof CarbEntity) {
+        carbPolymers.add(polymer);
+      }
+    }
+    return carbPolymers;
   }
 
   /**

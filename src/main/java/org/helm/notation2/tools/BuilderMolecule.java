@@ -44,6 +44,8 @@ import org.helm.notation2.exception.ChemistryException;
 import org.helm.notation2.exception.HELM2HandledException;
 import org.helm.notation2.parser.notation.connection.ConnectionNotation;
 import org.helm.notation2.parser.notation.polymer.BlobEntity;
+import org.helm.notation2.parser.notation.polymer.CarbEdge;
+import org.helm.notation2.parser.notation.polymer.CarbEntity;
 import org.helm.notation2.parser.notation.polymer.ChemEntity;
 import org.helm.notation2.parser.notation.polymer.GroupEntity;
 import org.helm.notation2.parser.notation.polymer.PeptideEntity;
@@ -94,6 +96,10 @@ public final class BuilderMolecule {
       List<Monomer> validMonomers =
           MethodsMonomerUtils.getListOfHandledMonomers(polymernotation.getPolymerElements().getListOfElements());
       return buildMoleculefromPeptideOrRNA(polymernotation.getPolymerID().getId(), validMonomers);
+    } /* Case 4: CARB */ else if (polymernotation.getPolymerID() instanceof CarbEntity) {
+      List<Monomer> validMonomers =
+          MethodsMonomerUtils.getListOfHandledMonomers(polymernotation.getListMonomers());
+      return buildMoleculefromCARB(polymernotation, validMonomers);
     } else {
       LOG.error("Molecule can't be build for unknown polymer type");
       throw new BuilderMoleculeException("Molecule can't be build for unknown polymer type");
@@ -409,6 +415,123 @@ public final class BuilderMolecule {
       LOG.error("Polymer(Peptide/RNA) molecule can't be built " + e.getMessage());
       throw new BuilderMoleculeException("Polymer(Peptide/RNA) molecule can't be built " + e.getMessage());
     }
+  }
+
+  /**
+   * method to build a molecule from a CARB (glycan) component
+   *
+   * Unlike PEPTIDE/RNA, a CARB polymer's monomers are not necessarily
+   * connected in strict list order via a fixed R-group pair - each bond's
+   * R-groups are explicit per {@link PolymerNotation#getCarbEdges()}, and
+   * branches mean the bond graph is a tree rather than a simple chain. Every
+   * monomer is built as its own molecule first, then every edge is merged in
+   * using the same generic, R-group-driven merge used for inter-polymer
+   * connections (see {@link #buildMoleculefromPolymers}) - tracking, for each
+   * position, which combined structure it currently belongs to, since a
+   * position's molecule fragment may already have been merged into a larger
+   * one by an earlier edge before a later edge (e.g. a branch converging back
+   * onto an earlier trunk monomer) needs to merge into it again.
+   *
+   * @param polymernotation the CARB polymer, used for its resolved intra-polymer edges
+   * @param validMonomers monomers of the polymer, in the same order as {@link PolymerNotation#getListMonomers()}
+   *          (i.e. list index {@code i} is the monomer at 1-based position {@code i + 1})
+   * @return built molecule
+   * @throws BuilderMoleculeException if the polymer has no contents, a monomer has no canonical
+   *           SMILES, or a connection references an R-group that does not exist or is not free
+   * @throws ChemistryException if the Chemistry Engine can not be initialized
+   */
+  private static RgroupStructure buildMoleculefromCARB(final PolymerNotation polymernotation, final List<Monomer> validMonomers)
+      throws BuilderMoleculeException, ChemistryException {
+    String id = polymernotation.getPolymerID().getId();
+    LOG.info("Build molecule for CARB polymer " + id);
+
+    if (validMonomers.isEmpty()) {
+      LOG.error("CARB polymer has no contents");
+      throw new BuilderMoleculeException("CARB polymer has no contents");
+    }
+
+    try {
+      Map<Integer, RgroupStructure> positionToStructure = new HashMap<Integer, RgroupStructure>();
+      for (int i = 0; i < validMonomers.size(); i++) {
+        int position = i + 1;
+        Monomer monomer = validMonomers.get(i);
+        String input = getInput(monomer);
+        if (input == null) {
+          throw new BuilderMoleculeException("CARB monomer should have canonical smiles: " + monomer.getAlternateId());
+        }
+        AbstractMolecule molecule =
+            Chemistry.getInstance().getManipulator().getMolecule(input, generateAttachmentList(monomer.getAttachmentList()));
+        RgroupStructure structure = new RgroupStructure();
+        structure.setMolecule(molecule);
+        structure.setRgroupMap(generateRgroupMap(id + ":" + position, molecule));
+        positionToStructure.put(position, structure);
+      }
+
+      /* union-find-style: mergedInto[p] = the position whose structure p's molecule was folded into */
+      Map<Integer, Integer> mergedInto = new HashMap<Integer, Integer>();
+      for (CarbEdge edge : polymernotation.getCarbEdges()) {
+        int sourceKey = resolveMergedPosition(mergedInto, edge.getSourcePosition());
+        int targetKey = resolveMergedPosition(mergedInto, edge.getTargetPosition());
+
+        RgroupStructure sourceStructure = positionToStructure.get(sourceKey);
+        RgroupStructure targetStructure = positionToStructure.get(targetKey);
+
+        if ("R?".equals(edge.getSourceRGroup()) || "R?".equals(edge.getTargetRGroup())) {
+          throw new BuilderMoleculeException("CARB connection has an unknown (R?) linkage and cannot be built "
+              + "into a molecule structure: " + edge.getSourcePosition() + ":" + edge.getSourceRGroup() + "-"
+              + edge.getTargetPosition() + ":" + edge.getTargetRGroup());
+        }
+
+        String sourceRgroupKey = id + ":" + edge.getSourcePosition() + ":" + edge.getSourceRGroup();
+        String targetRgroupKey = id + ":" + edge.getTargetPosition() + ":" + edge.getTargetRGroup();
+        IAtomBase sourceAtom = sourceStructure.getRgroupMap().get(sourceRgroupKey);
+        IAtomBase targetAtom = targetStructure.getRgroupMap().get(targetRgroupKey);
+        if (sourceAtom == null || targetAtom == null) {
+          throw new BuilderMoleculeException("CARB connection references an R-group that is not free: "
+              + edge.getSourcePosition() + ":" + edge.getSourceRGroup() + "-" + edge.getTargetPosition() + ":"
+              + edge.getTargetRGroup());
+        }
+
+        AbstractMolecule merged = Chemistry.getInstance().getManipulator().merge(
+            sourceStructure.getMolecule(), sourceAtom, targetStructure.getMolecule(), targetAtom);
+
+        sourceStructure.getRgroupMap().remove(sourceRgroupKey);
+        targetStructure.getRgroupMap().remove(targetRgroupKey);
+        Map<String, IAtomBase> combinedRgroupMap = new HashMap<String, IAtomBase>();
+        combinedRgroupMap.putAll(sourceStructure.getRgroupMap());
+        combinedRgroupMap.putAll(targetStructure.getRgroupMap());
+
+        RgroupStructure combined = new RgroupStructure();
+        combined.setMolecule(merged);
+        combined.setRgroupMap(combinedRgroupMap);
+
+        positionToStructure.put(sourceKey, combined);
+        if (targetKey != sourceKey) {
+          positionToStructure.put(targetKey, combined);
+          mergedInto.put(targetKey, sourceKey);
+        }
+      }
+
+      int rootKey = resolveMergedPosition(mergedInto, 1);
+      return positionToStructure.get(rootKey);
+    } catch (IOException | CTKException e) {
+      LOG.error("CARB molecule can't be built " + e.getMessage());
+      throw new BuilderMoleculeException("CARB molecule can't be built " + e.getMessage());
+    }
+  }
+
+  /**
+   * @param mergedInto union-find-style redirect map, see {@link #buildMoleculefromCARB}
+   * @param position starting position
+   * @return the current canonical position - one still directly present as a key in the
+   *         structure map - that {@code position}'s molecule fragment has ended up under
+   */
+  private static int resolveMergedPosition(Map<Integer, Integer> mergedInto, int position) {
+    int current = position;
+    while (mergedInto.containsKey(current)) {
+      current = mergedInto.get(current);
+    }
+    return current;
   }
 
   /**

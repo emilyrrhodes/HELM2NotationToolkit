@@ -482,7 +482,10 @@ public class MonomerParser {
       }
 
       if (monomer.getAlternateId().length() > 0
-          && !(monomer.getPolymerType().equals(Monomer.CHEMICAL_POLYMER_TYPE))) {
+          && !(monomer.getPolymerType().equals(Monomer.CHEMICAL_POLYMER_TYPE))
+          && !(monomer.getPolymerType().equals(Monomer.CARBOHYDRATE_POLYMER_TYPE))) {
+        /* CARB monomers have no natural-analogue concept - there are far too
+         * many natural monosaccharides for the idea to translate */
         String naturalAnalog = monomer.getNaturalAnalog();
 
         if (null == naturalAnalog) {
