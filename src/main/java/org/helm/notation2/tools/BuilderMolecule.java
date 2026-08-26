@@ -114,6 +114,15 @@ public final class BuilderMolecule {
               + element.getCount() + "') cannot be built into a concrete molecule");
         }
       }
+      for (MonomerNotation element : polymernotation.getListMonomers()) {
+        if (element instanceof CarbMonomerNotationUnit) {
+          CarbMonomerNotationUnit unit = (CarbMonomerNotationUnit) element;
+          if (!unit.isUnknown() && !unit.hasIntegerCount()) {
+            throw new HELM2HandledException("CARB monomer with a non-integer count ('"
+                + unit.getCount() + "') cannot be built into a concrete molecule");
+          }
+        }
+      }
       /*
        * Ambiguous CARB - a fully-unknown monomer ("X"/"*"/"?") or an ambiguity
        * group (mixture "(A+B)" / or-group "(A,B)") - has no single concrete

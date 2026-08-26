@@ -139,6 +139,34 @@ public class CarbBuilderMoleculeTest {
   }
 
   @Test
+  public void testDirectMonomerRepeatBuildsExpandedChain() throws ParserException, JDOMException,
+      BuilderMoleculeException, CTKException, NotationException, ChemistryException,
+      PolymerIDsException, MonomerException, GroupingNotationException, ConnectionNotationException,
+      MonomerLoadingException, org.helm.notation2.parser.exceptionparser.NotationException {
+    String notation = "CARB1{[b-D-Glcp]'3'}$$$$V2.0";
+    HELM2Notation helm2notation = HELM2NotationUtils.readNotation(notation);
+    Validation.validateNotationObjects(helm2notation);
+    String formula = MoleculePropertyCalculator.getMolecularFormular(helm2notation);
+    Assert.assertEquals(formula, "C18H32O16");
+  }
+
+  @Test
+  public void testDirectNonIntegerRepeatIsRejectedAtBuildTime() throws ParserException, JDOMException,
+      NotationException, ChemistryException, CTKException, PolymerIDsException, MonomerException,
+      GroupingNotationException, ConnectionNotationException, MonomerLoadingException,
+      org.helm.notation2.parser.exceptionparser.NotationException {
+    String notation = "CARB1{[b-D-Glcp]'n'}$$$$V2.0";
+    HELM2Notation helm2notation = HELM2NotationUtils.readNotation(notation);
+    Validation.validateNotationObjects(helm2notation);
+    try {
+      MoleculePropertyCalculator.getMolecularFormular(helm2notation);
+      Assert.fail("Expected BuilderMoleculeException for a non-integer direct CARB count");
+    } catch (BuilderMoleculeException e) {
+      Assert.assertTrue(e.getMessage().contains("non-integer count"), e.getMessage());
+    }
+  }
+
+  @Test
   public void testNonIntegerRepeatIsRejectedAtBuildTime() throws ParserException, JDOMException,
       NotationException, ChemistryException, CTKException, PolymerIDsException, MonomerException,
       GroupingNotationException, ConnectionNotationException, MonomerLoadingException,
